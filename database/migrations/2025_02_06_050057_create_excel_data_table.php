@@ -11,12 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('post_documents', function (Blueprint $table) {
+        Schema::create('excel_data', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('title');
-            $table->text('body');
-            $table->string('file_path')->nullable();
+            $table->string('title'); 
+            $table->string('body');
             $table->timestamps();
         });
     }
@@ -26,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('post_documents');
+        Schema::dropIfExists('excel_data');
     }
 };

@@ -8,6 +8,9 @@ use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Support\Facades\Gate;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class PostDocumentController extends Controller implements HasMiddleware
 {
@@ -22,7 +25,7 @@ class PostDocumentController extends Controller implements HasMiddleware
      */
     public function index()
     {
-        return PostDocument::all();
+        return PostDocument::with('user')->latest()->get();
     }
 
     /**
@@ -36,8 +39,66 @@ class PostDocumentController extends Controller implements HasMiddleware
         ]);
         $postDocument = $request->user()->postDocuments()->create($fields);
 
-        return $postDocument;
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setCellValue('A1', 'Título');
+        $sheet->setCellValue('B1', 'Cuerpo');
+        $sheet->setCellValue('A2', $fields['title']);
+        $sheet->setCellValue('B2', $fields['body']);
+
+        $fileName = 'document_' . $postDocument->id . '.xlsx';
+        $filePath = storage_path('app/public/documents/' . $fileName);
+
+        if (!file_exists(storage_path('app/public/documents'))) {
+            mkdir(storage_path('app/public/documents'), 0777, true);
+        }
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($filePath);
+
+        $postDocument->update(['file_path' => 'documents/' . $fileName]);
+
+        return ['post' => $postDocument,  'user' => $postDocument-> user];
+        //return response()->json($postDocument);
     }
+
+   public function import(Request $request)
+    {
+        
+        $request->validate([
+            'file' => 'required|mimes:xlsx,xls', 
+        ]);
+
+        
+        $file = $request->file('file');
+
+       
+        $spreadsheet = IOFactory::load($file->getRealPath());
+        $sheet = $spreadsheet->getActiveSheet();
+
+        
+        foreach ($sheet->getRowIterator(2) as $row) {
+            $cellIterator = $row->getCellIterator();
+            $cellIterator->setIterateOnlyExistingCells(false);
+
+          
+            $data = [];
+            foreach ($cellIterator as $cell) {
+                $data[] = $cell->getValue();
+            }
+
+           
+            PostDocument::create([
+                'title' => $data[0], 
+                'body' => $data[1],   
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Archivo importado correctamente.',
+        ], 200);
+    }
+
     /**
      * Display the specified resource.
      */
@@ -59,7 +120,27 @@ class PostDocumentController extends Controller implements HasMiddleware
         ]);
         $postDocument->update($fields);
 
-        return  $postDocument;
+         $existingFilePath = storage_path('app/public/' . $postDocument->file_path);
+        if (file_exists($existingFilePath)) {
+            unlink($existingFilePath); 
+        }
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setCellValue('A1', 'Título');
+        $sheet->setCellValue('B1', 'Cuerpo');
+        $sheet->setCellValue('A2', $fields['title']);
+        $sheet->setCellValue('B2', $fields['body']);
+
+        $fileName = 'document_' . $postDocument->id . '.xlsx';
+        $filePath = storage_path('app/public/documents/' . $fileName);
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($filePath);
+
+        $postDocument->update(['file_path' => 'documents/' . $fileName]);
+
+        return  response()->json($postDocument);
     }
 
     /**
@@ -68,6 +149,11 @@ class PostDocumentController extends Controller implements HasMiddleware
     public function destroy(PostDocument $postDocument)
     {
         Gate::authorize('modify', $postDocument);
+
+        $filepath= storage_path('app/public/'. $postDocument->file_path);
+        if(file_exists($filepath)){
+            unlink($filepath);
+        }
 
         $postDocument->delete();
         return ['message' => "El archivo fue borrado"];
