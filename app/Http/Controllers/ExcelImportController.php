@@ -28,13 +28,13 @@ class ExcelImportController extends Controller
             $cellIterator = $row->getCellIterator();
             $cellIterator->setIterateOnlyExistingCells(false);
 
-            // Obtener los valores de las celdas
+            
             $data = [];
             foreach ($cellIterator as $cell) {
                 $data[] = $cell->getValue();
             }
 
-            // Guardar los datos en la base de datos
+           
             PostDocument::create([
                 'title' => $data[0], 
                 'body' => $data[1],   
